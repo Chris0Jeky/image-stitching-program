@@ -2,6 +2,12 @@
 
 A small Python image-composition utility.
 
+Only the first four photos in filename order are decoded. Selected photos above
+40 million pixels and collage canvases above 20 million pixels are rejected
+before decoding or canvas allocation, respectively.
+
+Camera EXIF orientation is applied before scaling and aligning photo heights.
+
 ## License
 
 `compose.py` and the owner-authored documentation are licensed under GNU GPL
