@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageOps
 except ImportError:
     sys.exit("❌  Pillow is not installed. Run  pip install pillow  and try again.")
 
@@ -21,6 +21,8 @@ IMAGES_DIR   = Path("images")
 OUTPUT_DIR   = Path("output")
 LOGO_PATH    = Path("logo.png")     # or .jpg
 TARGET_HEIGHT = 1200               # px  (resize larger photos down to this height)
+MAX_IMAGE_PIXELS = 40_000_000       # reject oversized sources before decoding
+MAX_COLLAGE_PIXELS = 20_000_000     # bound the RGB output canvas allocation
 LOGO_MAX_W_PCT = 0.15              # logo will never exceed 15 % of collage width
 PADDING = 12                       # px margin for the logo
 COLLAGE_BG = (255, 255, 255)       # white background
@@ -30,7 +32,11 @@ def load_and_normalise(images: List[Path]) -> List[Image.Image]:
     """Open each image, down‑scaling so every frame has the same height."""
     opened: List[Image.Image] = []
     for p in images:
-        img = Image.open(p).convert("RGB")
+        with Image.open(p) as source:
+            if source.width * source.height > MAX_IMAGE_PIXELS:
+                raise ValueError(f"'{p}' exceeds the {MAX_IMAGE_PIXELS:,}-pixel limit.")
+            with ImageOps.exif_transpose(source) as oriented:
+                img = oriented.convert("RGB")
         if img.height > TARGET_HEIGHT:
             # keep aspect ratio
             w = int(img.width * TARGET_HEIGHT / img.height)
@@ -47,6 +53,8 @@ def stitch_row(frames: List[Image.Image]) -> Image.Image:
     """Return a single‑row collage containing all frames."""
     total_w = sum(f.width for f in frames)
     h = frames[0].height
+    if total_w * h > MAX_COLLAGE_PIXELS:
+        raise ValueError(f"Collage exceeds the {MAX_COLLAGE_PIXELS:,}-pixel limit.")
     canvas = Image.new("RGB", (total_w, h), COLLAGE_BG)
     x = 0
     for f in frames:
@@ -84,7 +92,7 @@ def main():
         sys.exit("❌  Need at least two images in the images/ folder.")
     print(f"Found {len(photos)} source images.")
 
-    frames = load_and_normalise(photos)
+    frames = load_and_normalise(photos[:4])
 
     for n in (2, 3, 4):
         if n > len(frames):
